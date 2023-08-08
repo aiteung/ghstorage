@@ -1,18 +1,21 @@
 package ghstorage
 
 import (
+	"fmt"
+	"os"
 	"testing"
 )
 
 func TestUploadFileToGitHub(t *testing.T) {
+	key := "ACCESSTOKEN"
 	// Ganti dengan informasi Anda
-	owner := "valenrio66"
-	accessToken := "your_access_token"
+	accessToken := os.Getenv(key)
+	fmt.Println(accessToken)
 
 	// Ganti dengan informasi file yang ingin diuji
-	filePath := "test.txt"
+	filePath := "presensi.txt"
 
-	err := UploadFileToGitHub(owner, filePath, accessToken)
+	err := UploadFileToGitHub(Owner, Organization, Repository, Branch, filePath, accessToken)
 	if err != nil {
 		t.Errorf("Error while uploading file: %v", err)
 	}

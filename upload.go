@@ -3,57 +3,21 @@ package ghstorage
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 )
 
 const (
+	Owner        = "iteungchatbot"
 	Organization = "repoulbi"
 	Repository   = "data_simpelbi"
 	Branch       = "main"
 )
 
-// Fungsi ini melakukan otentikasi OAuth dan mengembalikan token akses yang valid.
-func AuthenticateOAuth(clientID, clientSecret, code, redirectURL string) (string, error) {
-	// Menyusun payload untuk mendapatkan token akses.
-	payload := fmt.Sprintf("client_id=%s&client_secret=%s&code=%s&redirect_uri=%s",
-		clientID, clientSecret, code, redirectURL)
-
-	url := "https://github.com/login/oauth/access_token"
-
-	req, err := http.NewRequest("POST", url, bytes.NewBufferString(payload))
-	if err != nil {
-		return "", fmt.Errorf("gagal membuat HTTP request: %s", err.Error())
-	}
-
-	req.Header.Set("Accept", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("gagal melakukan HTTP request: %s", err.Error())
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("gagal mendapatkan token akses")
-	}
-
-	var responseBody struct {
-		AccessToken string `json:"access_token"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&responseBody); err != nil {
-		return "", fmt.Errorf("gagal membaca respons JSON: %s", err.Error())
-	}
-
-	return responseBody.AccessToken, nil
-}
-
 // Mengecek apakah file sudah ada atau belum
-func IsFileExist(owner, Organization, Repository, Branch, filePath, accessToken string) (bool, error) {
+func IsFileExist(Owner, Organization, Repository, Branch, filePath, accessToken string) (bool, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/contents/%s", Organization, Repository, filePath)
 
 	req, err := http.NewRequest("GET", url, nil)
@@ -80,7 +44,7 @@ func IsFileExist(owner, Organization, Repository, Branch, filePath, accessToken 
 		return true, nil
 	} else {
 		// Respon lainnya, ada kesalahan
-		responseBody, err := ioutil.ReadAll(resp.Body)
+		responseBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return false, fmt.Errorf("gagal membaca respons HTTP: %s", err.Error())
 		}
@@ -89,8 +53,8 @@ func IsFileExist(owner, Organization, Repository, Branch, filePath, accessToken 
 }
 
 // UploadFileToGitHub mengunggah file ke repositori GitHub menggunakan GitHub API.
-func UploadFileToGitHub(owner, filePath, accessToken string) error {
-	fileExists, err := IsFileExist(owner, Organization, Repository, Branch, filePath, accessToken)
+func UploadFileToGitHub(Owner, Organization, Repository, Branch, filePath, accessToken string) error {
+	fileExists, err := IsFileExist(Owner, Organization, Repository, Branch, filePath, accessToken)
 	if err != nil {
 		return err
 	}
@@ -99,7 +63,13 @@ func UploadFileToGitHub(owner, filePath, accessToken string) error {
 		return fmt.Errorf("File sudah ada")
 	}
 
-	fileContent, err := ioutil.ReadFile(filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("gagal membuka file: %s", err.Error())
+	}
+	defer file.Close()
+
+	fileContent, err := io.ReadAll(file)
 	if err != nil {
 		return fmt.Errorf("gagal membaca file: %s", err.Error())
 	}
@@ -133,7 +103,11 @@ func UploadFileToGitHub(owner, filePath, accessToken string) error {
 	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusCreated {
 		// Tidak perlu mencetak log di sini
 	} else {
-		return fmt.Errorf("gagal mengunggah file")
+		responseBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("gagal membaca respons HTTP: %s", err.Error())
+		}
+		return fmt.Errorf("gagal mengunggah file: %s", string(responseBody))
 	}
 
 	return nil
